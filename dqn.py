@@ -44,8 +44,35 @@ class DQN(nn.Module):
         #    nn.Linear(64, num_actions)
         #)       
         ########## YOUR CODE HERE (5~10 lines) ##########
-
-        
+        # The template passes only num_actions, so it also tells the two games apart:
+        # CartPole-v1 has 2 actions, ALE/Pong-v5 has 6 (env.action_space.n).
+        # B = batch size in the shapes below.
+        if num_actions == 2:
+            # CartPole (Task 1): the state is 4 numbers. The size is my choice (spec 2.1).
+            self.input_scale = 1.0  # the state is not a picture, so forward() must not scale it
+            self.network = nn.Sequential(  # CORE: network layers
+                nn.Linear(4, 64),  # (B, 4) -> (B, 64)
+                nn.ReLU(),
+                nn.Linear(64, 64),  # (B, 64) -> (B, 64)
+                nn.ReLU(),
+                nn.Linear(64, num_actions),  # (B, 64) -> (B, 2), one Q-value per action
+            )
+        else:
+            # Pong (Tasks 2 and 3): the same layers, in the same order, as test_model.py.
+            # test_model.py loads weights by name (network.0, network.2, ...), so the order must match.
+            self.input_scale = 255.0  # pixels are stored as 0-255, and the network must see 0-1
+            self.network = nn.Sequential(  # CORE: network layers
+                nn.Conv2d(4, 32, kernel_size=8, stride=4),  # (B, 4, 84, 84) -> (B, 32, 20, 20)
+                nn.ReLU(),
+                nn.Conv2d(32, 64, kernel_size=4, stride=2),  # -> (B, 64, 9, 9)
+                nn.ReLU(),
+                nn.Conv2d(64, 64, kernel_size=3, stride=1),  # -> (B, 64, 7, 7)
+                nn.ReLU(),
+                nn.Flatten(),  # -> (B, 3136); 64 * 7 * 7 = 3136
+                nn.Linear(64 * 7 * 7, 512),  # -> (B, 512)
+                nn.ReLU(),
+                nn.Linear(512, num_actions),  # -> (B, 6), one Q-value per action
+            )
         ########## END OF YOUR CODE ##########
 
     def forward(self, x):
@@ -91,17 +118,35 @@ class PrioritizedReplayBuffer:
 
     def add(self, transition, error):
         ########## YOUR CODE HERE (for Task 3) ########## 
-                    
+        # Fundamentals page 8, Step 5. 0.01 = the spec's epsilon: a zero error can still be drawn (spec section 1).
+        priority = abs(error) + 0.01  # CORE: priority
+        if len(self.buffer) < self.capacity:
+            self.buffer.append(transition)  # still filling up
+        else:
+            self.buffer[self.pos] = transition  # full: overwrite the oldest
+        self.priorities[self.pos] = priority
+        self.pos = (self.pos + 1) % self.capacity  # ring: the position wraps back to 0
         ########## END OF YOUR CODE (for Task 3) ########## 
         return 
     def sample(self, batch_size):
         ########## YOUR CODE HERE (for Task 3) ########## 
-                    
+        # Fundamentals page 8, Steps 2 and 3. B = batch_size.
+        n = len(self.buffer)  # how many transitions are stored (the spec's N)
+        # [:n] keeps only the filled part. float64: np.random.choice needs the chances to sum to 1 very exactly.
+        scaled = self.priorities[:n].astype(np.float64) ** self.alpha  # (n)
+        chances = scaled / scaled.sum()  # CORE: sampling chance; (n), sums to 1. The spec's P(i)
+        indices = np.random.choice(n, batch_size, p=chances)  # (B) positions, drawn with those chances
+        weights = (n * chances[indices]) ** (-self.beta)  # CORE: IS weights; (B)
+        weights = weights / weights.max()  # normalize, so that a weight can only shrink a step (spec section 1)
+        batch = [self.buffer[i] for i in indices]  # list comprehension: the B chosen transitions
+        return batch, indices, weights.astype(np.float32)
         ########## END OF YOUR CODE (for Task 3) ########## 
         return
     def update_priorities(self, indices, errors):
         ########## YOUR CODE HERE (for Task 3) ########## 
-                    
+        # Fundamentals page 8, Step 5. zip walks the two lists side by side.
+        for i, error in zip(indices, errors):
+            self.priorities[i] = abs(error) + 0.01  # the same 0.01 as in add()
         ########## END OF YOUR CODE (for Task 3) ########## 
         return
         
@@ -183,7 +228,18 @@ class DQNAgent:
                     })
                     ########## YOUR CODE HERE  ##########
                     # Add additional wandb logs for debugging if needed 
-                    
+                    # Spec 4.1, "how you use Weight & Bias". The self.last_ values are set at the end of train().
+                    wandb.log({
+                        "Env Step Count": self.env_count,
+                        "Loss": self.last_loss,
+                        "Q Mean": self.last_q_mean,
+                        "Bellman Error Mean": self.last_error_mean,
+                    })
+                    # env_count is a multiple of 1000 here, and so are 600k, 1M, ... (spec 4.2.2, Task 3).
+                    self.save_files_at_this_step()  # in run_experiment.py
+                    # Task 3 needs an exact step count, and the for loop above only counts games.
+                    if self.env_count >= self.max_env_steps:  # max_env_steps: in run_experiment.py
+                        return
                     ########## END OF YOUR CODE ##########   
             print(f"[Eval] Ep: {ep} Total Reward: {total_reward} SC: {self.env_count} UC: {self.train_count} Eps: {self.epsilon:.4f}")
             wandb.log({
@@ -246,33 +302,59 @@ class DQNAgent:
        
         ########## YOUR CODE HERE (<5 lines) ##########
         # Sample a mini-batch of (s,a,r,s',done) from the replay buffer
-
-      
-            
+        # self.memory draws uniformly, or by priority with --per (ReplayMemory in run_experiment.py).
+        batch, indices, weights = self.memory.sample(self.batch_size)
+        # zip(*batch): a list of B 5-tuples -> 5 tuples of length B (array of structs -> struct of arrays).
+        states, actions, rewards, next_states, dones = zip(*batch)
         ########## END OF YOUR CODE ##########
 
         # Convert the states, actions, rewards, next_states, and dones into torch tensors
         # NOTE: Enable this part after you finish the mini-batch sampling
-        #states = torch.from_numpy(np.array(states).astype(np.float32)).to(self.device)
-        #next_states = torch.from_numpy(np.array(next_states).astype(np.float32)).to(self.device)
-        #actions = torch.tensor(actions, dtype=torch.int64).to(self.device)
-        #rewards = torch.tensor(rewards, dtype=torch.float32).to(self.device)
-        #dones = torch.tensor(dones, dtype=torch.float32).to(self.device)
-        #q_values = self.q_net(states).gather(1, actions.unsqueeze(1)).squeeze(1)
+        states = torch.from_numpy(np.array(states).astype(np.float32)).to(self.device)
+        next_states = torch.from_numpy(np.array(next_states).astype(np.float32)).to(self.device)
+        actions = torch.tensor(actions, dtype=torch.int64).to(self.device)
+        rewards = torch.tensor(rewards, dtype=torch.float32).to(self.device)
+        dones = torch.tensor(dones, dtype=torch.float32).to(self.device)
+        q_values = self.q_net(states).gather(1, actions.unsqueeze(1)).squeeze(1)  # CORE: Q-value of the taken action
         
         ########## YOUR CODE HERE (~10 lines) ##########
         # Implement the loss function of DQN and the gradient updates 
-      
-        
-      
+        # Step numbers follow fundamentals page 6. Every vector below has shape (B), B = batch size.
+        # Step 1: the target. no_grad: it is a fixed label, so no gradient flows through it.
+        with torch.no_grad():
+            if self.double:
+                # Double DQN (page 7): the main network chooses, and the target network gives the value.
+                next_actions = self.q_net(next_states).argmax(1)  # (B, num_actions) -> (B)
+                next_q = self.target_net(next_states).gather(1, next_actions.unsqueeze(1)).squeeze(1)  # CORE: Double DQN target
+            else:
+                next_q = self.target_net(next_states).max(1)[0]  # .max(1)[0]: the largest value in each row
+            # rewards already hold the n-step sum, and gamma ** n_step is plain gamma when n_step is 1 (page 9).
+            targets = rewards + self.gamma ** self.n_step * (1 - dones) * next_q  # CORE: Bellman target
+        # Step 2: the Bellman error.
+        errors = targets - q_values  # CORE: Bellman error and loss
+        # Step 3: the loss. Without --per all weights are 1, so this is plain MSE (Mean Squared Error).
+        # The spec's formula (1) is half the sum. This mean differs from it only by the constant B / 2.
+        weights = torch.from_numpy(weights).to(self.device)  # numpy array -> tensor, or the product below fails
+        loss = (weights * errors.pow(2)).mean()  # CORE: weighted loss; one number
+        # Step 5: one update.
+        self.optimizer.zero_grad()  # backward() adds to the old gradients, so clear them first
+        loss.backward()
+        nn.utils.clip_grad_norm_(self.q_net.parameters(), 10.0)  # my choice: limits rare large gradients
+        self.optimizer.step()
+        # PER (page 8, Step 5): write the new error sizes back. This does nothing without --per.
+        self.memory.update_priorities(indices, errors.detach().abs().cpu().numpy())
+        # Kept for the wandb log in run(). .item(): a one-number tensor -> a Python number.
+        self.last_loss = loss.item()
+        self.last_q_mean = q_values.mean().item()
+        self.last_error_mean = errors.abs().mean().item()
         ########## END OF YOUR CODE ##########  
 
         if self.train_count % self.target_update_frequency == 0:
             self.target_net.load_state_dict(self.q_net.state_dict())
 
         # NOTE: Enable this part if "loss" is defined
-        #if self.train_count % 1000 == 0:
-        #    print(f"[Train #{self.train_count}] Loss: {loss.item():.4f} Q mean: {q_values.mean().item():.3f} std: {q_values.std().item():.3f}")
+        if self.train_count % 1000 == 0:
+            print(f"[Train #{self.train_count}] Loss: {loss.item():.4f} Q mean: {q_values.mean().item():.3f} std: {q_values.std().item():.3f}")
 
 
 if __name__ == "__main__":

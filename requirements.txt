@@ -1,0 +1,9 @@
+# Versions recommended by spec section 3. imageio is for test_model.py and videos; matplotlib is for make_plots.py.
+gymnasium==1.1.1
+ale-py>=0.10.0
+opencv-python
+torch
+wandb
+numpy
+imageio[ffmpeg]
+matplotlib

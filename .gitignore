@@ -1,0 +1,7 @@
+__pycache__/
+.DS_Store
+runs/
+wandb/
+*.pt
+*.mp4
+*.zip

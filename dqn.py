@@ -76,7 +76,7 @@ class DQN(nn.Module):
         ########## END OF YOUR CODE ##########
 
     def forward(self, x):
-        return self.network(x)
+        return self.network(x / self.input_scale)  # CORE: scale pixels to 0-1. [MY WORK] was self.network(x); input_scale is 255 for Pong, 1 for CartPole, so training matches test_model.py
 
 
 class AtariPreprocessor:

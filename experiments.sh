@@ -33,7 +33,10 @@ case "$1" in
   task3_imp_b)  # Improvement run 2 (one change): Task 3 with learning rate 0.00005
     python run_experiment.py --name task3_imp_b $PONG $FULL --lr 0.00005 --max-env-steps 2500000 \
       --snapshot-steps 600000,1000000,1500000,2000000,2500000 ;;
+  task3_imp_c)  # Improvement run 3, the last (one change from imp_b): learning rate 0.00003
+    python run_experiment.py --name task3_imp_c $PONG $FULL --lr 0.00003 --max-env-steps 2500000 \
+      --snapshot-steps 600000,1000000,1500000,2000000,2500000 ;;
   *)
-    echo "Usage: bash experiments.sh speed|task1|task2|task3|no_double|no_per|no_multistep|task3_imp_a|task3_imp_b"
+    echo "Usage: bash experiments.sh speed|task1|task2|task3|no_double|no_per|no_multistep|task3_imp_a|task3_imp_b|task3_imp_c"
     exit 1 ;;
 esac

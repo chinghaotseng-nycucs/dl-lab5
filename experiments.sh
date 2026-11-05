@@ -27,7 +27,13 @@ case "$1" in
     python run_experiment.py --name no_per $PONG --double --n-step 3 --max-env-steps 1000000 ;;
   no_multistep) # Spec 4.1, ablation: Task 3 with 1-step returns
     python run_experiment.py --name no_multistep $PONG --double --per --max-env-steps 1000000 ;;
+  task3_imp_a)  # Improvement run 1 (stop rule: one change): Task 3 with 2 updates per environment step
+    python run_experiment.py --name task3_imp_a $PONG $FULL --train-per-step 2 --max-env-steps 2500000 \
+      --snapshot-steps 600000,1000000,1500000,2000000,2500000 ;;
+  task3_imp_b)  # Improvement run 2 (one change): Task 3 with learning rate 0.00005
+    python run_experiment.py --name task3_imp_b $PONG $FULL --lr 0.00005 --max-env-steps 2500000 \
+      --snapshot-steps 600000,1000000,1500000,2000000,2500000 ;;
   *)
-    echo "Usage: bash experiments.sh speed|task1|task2|task3|no_double|no_per|no_multistep"
+    echo "Usage: bash experiments.sh speed|task1|task2|task3|no_double|no_per|no_multistep|task3_imp_a|task3_imp_b"
     exit 1 ;;
 esac

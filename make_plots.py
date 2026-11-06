@@ -90,10 +90,11 @@ def main():
     axis.axhline(args.target, color=INK_SECONDARY, linewidth=1, linestyle=(0, (4, 3)))
     axis.annotate(
         f"target {args.target:g}",
-        xy=(0, args.target),
+        xy=(1, args.target),  # right end: a curve that peaks early does not cover the label
         xycoords=("axes fraction", "data"),
-        xytext=(4, 4),
+        xytext=(-4, 4),
         textcoords="offset points",
+        ha="right",
         color=INK_SECONDARY,
         fontsize=8,
     )

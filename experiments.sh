@@ -10,6 +10,8 @@ PONG="$PONG --epsilon-decay 0.99998 --epsilon-min 0.02 --target-update-frequency
 FULL="--double --per --n-step 3"
 # task3_imp_b, the best run so far. Each experiment below changes one thing from it. Settings given later win.
 BEST="$PONG $FULL --lr 0.00005 --max-env-steps 2500000 --snapshot-steps 600000,1000000,1500000,2000000,2500000"
+# The final settings for the ablation and vanilla runs: task3_e1's, without the three techniques. 1M steps (spec 4.1).
+FINAL="$PONG --lr 0.00005 --memory-size 500000 --max-env-steps 1000000"
 
 case "$1" in
   speed)        # a short test: how many environment steps per second on this machine
@@ -56,6 +58,23 @@ case "$1" in
       --per-beta-steps 500000 ;;
   task3_e7)     # Report E7: a point ends the target, in training only
     python run_experiment.py --name task3_e7 $BEST --point-ends-target ;;
+  task3_e1_s1)  # Report E1, second seed: is the larger memory's gain real?
+    python run_experiment.py --name task3_e1_s1 $BEST --memory-size 500000 --seed 1 ;;
+  task3_e1_s2)  # Report E1, third seed
+    python run_experiment.py --name task3_e1_s2 $BEST --memory-size 500000 --seed 2 ;;
+  task3_e1e2)   # Extra: E1 and E2 together. Fedus et al. found that more capacity and less replay help together
+    python run_experiment.py --name task3_e1e2 $BEST --memory-size 500000 --train-every 4 --lr 0.0002 \
+      --epsilon-decay 0.99992 --per-beta-steps 250000 ;;
+  task3_e1e3)   # Extra: E1 and E3 together, because E3 had the next best score by 1M (17.7)
+    python run_experiment.py --name task3_e1e3 $BEST --memory-size 500000 --adam-eps 0.00015 ;;
+  f1_no_double)    # Spec 4.1, ablation at the final settings (E1): without Double DQN
+    python run_experiment.py --name f1_no_double $FINAL --per --n-step 3 ;;
+  f1_no_per)       # Spec 4.1, ablation at the final settings (E1): without PER
+    python run_experiment.py --name f1_no_per $FINAL --double --n-step 3 ;;
+  f1_no_multistep) # Spec 4.1, ablation at the final settings (E1): with 1-step returns
+    python run_experiment.py --name f1_no_multistep $FINAL --double --per ;;
+  f2_vanilla)      # Spec 2.3 and Task 2: vanilla DQN at the final settings (E1), for a fair comparison
+    python run_experiment.py --name f2_vanilla $FINAL ;;
   *)
     echo "Usage: bash experiments.sh <run>. The runs are the names in this file."
     exit 1 ;;

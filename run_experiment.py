@@ -12,6 +12,7 @@ Files a run writes in runs/<name>/:
     log.csv           one row per evaluation: environment steps, updates, 20-game average, min, max, epsilon
     checkpoints.csv   the SHA-256 of every .pt file, recorded as the run goes
     snapshot_<n>.pt   the weights at exactly n environment steps (spec 4.2.2, Task 3)
+    first19_<n>.pt    Pong: the first model whose 20-game average reaches 19, at n environment steps
     best_model.pt     the best 20-game average so far (saved by the TA's run())
     model_ep<n>.pt    the TA's save every 100 games
     resume.pt         weights, optimizer and counters, to restart after a crash
@@ -166,6 +167,7 @@ class LabAgent(DQNAgent):
         self.optimizer = torch.optim.Adam(self.q_net.parameters(), lr=args.lr, eps=args.adam_eps)
         self.train_every = args.train_every
         self.train_calls = 0  # how many times run() has asked for an update
+        self.first_19_saved = not is_pong  # the target of 19 exists only in Pong (spec 4.2.2)
         self.double = args.double
         self.n_step = args.n_step
         self.max_env_steps = args.max_env_steps
@@ -220,6 +222,11 @@ class LabAgent(DQNAgent):
         seconds = round(time.time() - self.start_time)
         row = [self.env_count, self.train_count, mean, min(scores), max(scores), round(self.epsilon, 4), seconds]
         write_csv_row(self.log_path, row)
+        if mean >= 19 and not self.first_19_saved:
+            # Keep the first model that reaches 19: the grade depends on how early that is (spec 4.2.2), and
+            # best_model.pt is overwritten by every later, higher score.
+            torch.save(self.q_net.state_dict(), os.path.join(self.save_dir, f"first19_{self.env_count}.pt"))
+            self.first_19_saved = True
         self.record_new_checkpoints()  # picks up the best_model.pt that run() saved after the last evaluation
         return mean
 

@@ -223,6 +223,49 @@ def run(*command):
     return done.stdout
 
 
+def test_experiment_flags():
+    """The Task 3 report's flags: each does what the report says, and the defaults change nothing."""
+    # E7: a reward flushes the window, and both stored transitions end their targets.
+    memory = ReplayMemory(100, 0.99, 3, False, 0.6, 0.4, 1.0, 100, point_ends_target=True)
+    memory.append(("s0", 0, 0.0, "s1", False))
+    check("E7: no reward, nothing stored yet", len(memory) == 0)
+    memory.append(("s1", 0, 1.0, "s2", False))
+    stored = list(memory.buffer)
+    check("E7: a point stores both", len(stored) == 2 and stored[0][4] and stored[1][4])
+    check("E7: the return still discounts", close(stored[0][2], 0.99) and close(stored[1][2], 1.0))
+    # The same steps without the flag stay in the queue.
+    memory = ReplayMemory(100, 0.99, 3, False, 0.6, 0.4, 1.0, 100)
+    memory.append(("s0", 0, 0.0, "s1", False))
+    memory.append(("s1", 0, 1.0, "s2", False))
+    check("E7 off: a point stores nothing", len(memory) == 0)
+    # E5: the priority is limited, and a new transition can no longer get a larger one.
+    memory = ReplayMemory(100, 0.99, 1, True, 0.6, 0.4, 1.0, 100, priority_clip=1.0)
+    memory.append(("s0", 0, 0.0, "s1", True))
+    memory.update_priorities(np.array([0]), np.array([5.0]))
+    check("E5: priority limited to 1 + 0.01", close(memory.buffer.priorities[0], 1.01))
+    check("E5: max_error limited to 1", memory.max_error == 1.0)
+    memory = ReplayMemory(100, 0.99, 1, True, 0.6, 0.4, 1.0, 100)
+    memory.append(("s0", 0, 0.0, "s1", True))
+    memory.update_priorities(np.array([0]), np.array([5.0]))
+    check(
+        "E5 off: priority unchanged by the limit", close(memory.buffer.priorities[0], 5.01) and memory.max_error == 5.0
+    )
+    # E2 and E3, in a real short run: 2000 steps, of which about 200 fill the memory, so about 450 updates.
+    run(
+        "run_experiment.py",
+        *"--env CartPole-v1 --wandb-mode offline --replay-start-size 200 --memory-size 2000".split(),
+        *"--max-env-steps 2000 --train-every 4 --adam-eps 0.00015 --name _smoke_flags".split(),
+    )
+    agent_args = run_experiment.json.load(open(os.path.join("runs", "_smoke_flags", "env.json")))["args"]
+    check("E3: the setting is recorded", agent_args["adam_eps"] == 0.00015)
+    rows = open(os.path.join("runs", "_smoke_flags", "log.csv")).read().strip().split("\n")[1:]
+    last = rows[-1].split(",")
+    steps, updates = int(last[0]), int(last[1])
+    check(
+        "E2: about 1 update per 4 steps", abs(updates - (steps - 200) / 4) <= 2, f"{updates} updates at {steps} steps"
+    )
+
+
 def test_real_runs():
     """Short real runs of both games, vanilla and with all three techniques, plus the evaluation commands."""
     small = "--wandb-mode offline --replay-start-size 200 --memory-size 2000 --max-env-steps 1000".split()
@@ -270,15 +313,16 @@ def test_real_runs():
 def main():
     random.seed(0)
     os.makedirs("runs", exist_ok=True)
-    for name in SMOKE_NAMES:
+    for name in [*SMOKE_NAMES, "_smoke_flags"]:
         shutil.rmtree(os.path.join("runs", name), ignore_errors=True)
     test_only_todos_changed()
     test_network_shapes()
     test_per()
     test_n_step()
     test_train()
+    test_experiment_flags()
     test_real_runs()
-    for name in SMOKE_NAMES:
+    for name in [*SMOKE_NAMES, "_smoke_flags"]:
         shutil.rmtree(os.path.join("runs", name), ignore_errors=True)
     print()
     print(f"{len(failures)} failed: {failures}" if failures else "All checks passed.")

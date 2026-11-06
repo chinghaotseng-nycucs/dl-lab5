@@ -1,6 +1,6 @@
 #!/bin/bash
 # The training commands of Lab5. Usage: bash experiments.sh <run>
-#   Runs: speed, task1, task2, task3, no_double, no_per, no_multistep
+#   Runs: speed, task1, task2, task3, no_double, no_per, no_multistep, task3_imp_a to c, task3_r1, task3_e1 to e7
 # The settings here are my choices. The spec fixes only the tasks and the snapshot steps (spec 2 and 4.2.2).
 set -e
 
@@ -8,6 +8,8 @@ set -e
 PONG="--env ALE/Pong-v5 --lr 0.0001 --batch-size 32 --memory-size 100000 --replay-start-size 20000"
 PONG="$PONG --epsilon-decay 0.99998 --epsilon-min 0.02 --target-update-frequency 1000"
 FULL="--double --per --n-step 3"
+# task3_imp_b, the best run so far. Each experiment below changes one thing from it. Settings given later win.
+BEST="$PONG $FULL --lr 0.00005 --max-env-steps 2500000 --snapshot-steps 600000,1000000,1500000,2000000,2500000"
 
 case "$1" in
   speed)        # a short test: how many environment steps per second on this machine
@@ -36,7 +38,25 @@ case "$1" in
   task3_imp_c)  # Improvement run 3, the last (one change from imp_b): learning rate 0.00003
     python run_experiment.py --name task3_imp_c $PONG $FULL --lr 0.00003 --max-env-steps 2500000 \
       --snapshot-steps 600000,1000000,1500000,2000000,2500000 ;;
+  task3_r1)     # A second seed of task3_imp_b, to measure the noise between runs
+    python run_experiment.py --name task3_r1 $BEST --seed 1 ;;
+  task3_e1)     # Report E1: replay memory 500k
+    python run_experiment.py --name task3_e1 $BEST --memory-size 500000 ;;
+  task3_e2)     # Report E2: 1 update per 4 steps. lr x updates per step, epsilon and beta keep their env-step schedules
+    python run_experiment.py --name task3_e2 $BEST --train-every 4 --lr 0.0002 --epsilon-decay 0.99992 \
+      --per-beta-steps 250000 ;;
+  task3_e3)     # Report E3: Adam epsilon 1.5e-4
+    python run_experiment.py --name task3_e3 $BEST --adam-eps 0.00015 ;;
+  task3_e4)     # Report E4: copy to the target network every 4000 updates
+    python run_experiment.py --name task3_e4 $BEST --target-update-frequency 4000 ;;
+  task3_e5)     # Report E5: limit the error used for priorities to 1
+    python run_experiment.py --name task3_e5 $BEST --priority-clip 1 ;;
+  task3_e6)     # Report E6: batch 64, 1 update per 2 steps. Replay count and lr x updates per step stay the same
+    python run_experiment.py --name task3_e6 $BEST --batch-size 64 --train-every 2 --lr 0.0001 --epsilon-decay 0.99996 \
+      --per-beta-steps 500000 ;;
+  task3_e7)     # Report E7: a point ends the target, in training only
+    python run_experiment.py --name task3_e7 $BEST --point-ends-target ;;
   *)
-    echo "Usage: bash experiments.sh speed|task1|task2|task3|no_double|no_per|no_multistep|task3_imp_a|task3_imp_b|task3_imp_c"
+    echo "Usage: bash experiments.sh <run>. The runs are the names in this file."
     exit 1 ;;
 esac

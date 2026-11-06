@@ -63,8 +63,22 @@ class ReplayMemory:
     self.memory.append(...), so this class keeps that line unchanged. Fundamentals pages 5, 8 and 9.
     """
 
-    def __init__(self, capacity, gamma, n_step, per, alpha, beta, beta_end, beta_steps):
+    def __init__(
+        self,
+        capacity,
+        gamma,
+        n_step,
+        per,
+        alpha,
+        beta,
+        beta_end,
+        beta_steps,
+        priority_clip=0.0,
+        point_ends_target=False,
+    ):
         self.gamma = gamma
+        self.priority_clip = priority_clip  # 0 = no limit. Extra, Task 3 report E5
+        self.point_ends_target = point_ends_target  # False = only the end of a game ends a target. Extra, report E7
         self.n_step = n_step  # 1 = plain DQN
         self.per = per  # False = uniform sampling
         self.n_queue = deque()  # transitions waiting for their next n_step rewards
@@ -82,6 +96,9 @@ class ReplayMemory:
 
     def append(self, transition):
         """Take one (state, action, reward, next_state, done) from run(), and store it once its window is full."""
+        if self.point_ends_target and transition[2] != 0:
+            # Pong: after a point the ball is served again. *transition[:4] unpacks (s, a, r, s'); done becomes True.
+            transition = (*transition[:4], True)
         self.n_queue.append(transition)
         done = transition[4]
         if done:
@@ -117,6 +134,9 @@ class ReplayMemory:
     def update_priorities(self, indices, errors):
         """Pass the new error sizes to the PER buffer. It does nothing with uniform sampling."""
         if self.per:
+            if self.priority_clip > 0:
+                # The loss in train() keeps the full error. Only the sampling chances see this limit (report E5).
+                errors = np.minimum(errors, self.priority_clip)  # (B)
             self.max_error = max(self.max_error, float(errors.max()))
             self.buffer.update_priorities(indices, errors)
 
@@ -139,7 +159,13 @@ class LabAgent(DQNAgent):
             args.per_beta,
             args.per_beta_end,
             args.per_beta_steps,
+            args.priority_clip,
+            args.point_ends_target,
         )
+        # The TA's __init__ uses Adam's default eps, 1e-8. Replacing it here keeps dqn.py unchanged (report E3).
+        self.optimizer = torch.optim.Adam(self.q_net.parameters(), lr=args.lr, eps=args.adam_eps)
+        self.train_every = args.train_every
+        self.train_calls = 0  # how many times run() has asked for an update
         self.double = args.double
         self.n_step = args.n_step
         self.max_env_steps = args.max_env_steps
@@ -158,6 +184,16 @@ class LabAgent(DQNAgent):
         self.env.reset(seed=args.seed)  # later reset() calls continue from this seed
         if args.resume_from:
             self.load_resume(args.resume_from)
+
+    def train(self):
+        """Do the TA's update on every train_every-th call. run() calls this once per environment step (report E2).
+
+        Epsilon decays inside the update, so with --train-every 4 the decay per update must be 4 times stronger
+        to keep the same schedule in environment steps: 0.99998 ** 4 = 0.99992.
+        """
+        self.train_calls += 1
+        if self.train_calls % self.train_every == 0:
+            super().train()
 
     def evaluate(self):
         """Average score over 20 games, seeds 0 to 19, with no random actions (spec 4.2.2).
@@ -317,6 +353,11 @@ def parse_args():
     parser.add_argument("--per-beta", type=float, default=0.4)  # default 0.4, the TA's default
     parser.add_argument("--per-beta-end", type=float, default=1.0)  # default 1.0; extra, not required
     parser.add_argument("--per-beta-steps", type=int, default=1000000)  # default 1000000 updates; extra
+    # New: the Task 3 experiments. Extra, not required. The defaults change nothing.
+    parser.add_argument("--train-every", type=int, default=1)  # default 1; one update per this many env steps (E2, E6)
+    parser.add_argument("--adam-eps", type=float, default=1e-8)  # default 1e-8, Adam's own default (E3)
+    parser.add_argument("--priority-clip", type=float, default=0.0)  # default 0, no limit (E5)
+    parser.add_argument("--point-ends-target", action="store_true")  # default off (E7)
     args = parser.parse_args()
     if args.max_env_steps % 1000 != 0:
         parser.error("--max-env-steps must be a multiple of 1000: run() only checks it every 1000 steps")

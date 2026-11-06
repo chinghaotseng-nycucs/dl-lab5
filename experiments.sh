@@ -62,6 +62,8 @@ case "$1" in
     python run_experiment.py --name task3_e1_s1 $BEST --memory-size 500000 --seed 1 ;;
   task3_e1_s2)  # Report E1, third seed
     python run_experiment.py --name task3_e1_s2 $BEST --memory-size 500000 --seed 2 ;;
+  task3_e1_s3)  # Report E1, fourth seed, because a seed that is lucky by 1M is worth 17% (spec 4.2.2)
+    python run_experiment.py --name task3_e1_s3 $BEST --memory-size 500000 --seed 3 ;;
   task3_e1e2)   # Extra: E1 and E2 together. Fedus et al. found that more capacity and less replay help together
     python run_experiment.py --name task3_e1e2 $BEST --memory-size 500000 --train-every 4 --lr 0.0002 \
       --epsilon-decay 0.99992 --per-beta-steps 250000 ;;

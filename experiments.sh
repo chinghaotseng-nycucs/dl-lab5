@@ -81,6 +81,10 @@ case "$1" in
     python run_experiment.py --name task3_e1e3_s4 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 4 ;;
   task3_e1e3_s5) # E1 and E3 together, sixth seed
     python run_experiment.py --name task3_e1e3_s5 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 5 ;;
+  task3_e1e3_s6) # E1 and E3 together, seventh seed: looking for a 1M snapshot that itself reaches 19
+    python run_experiment.py --name task3_e1e3_s6 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 6 ;;
+  task3_e1e3_s7) # E1 and E3 together, eighth seed
+    python run_experiment.py --name task3_e1e3_s7 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 7 ;;
   f1_no_double)    # Spec 4.1, ablation at the final settings (E1): without Double DQN
     python run_experiment.py --name f1_no_double $FINAL --per --n-step 3 ;;
   f1_no_per)       # Spec 4.1, ablation at the final settings (E1): without PER

@@ -12,6 +12,8 @@ FULL="--double --per --n-step 3"
 BEST="$PONG $FULL --lr 0.00005 --max-env-steps 2500000 --snapshot-steps 600000,1000000,1500000,2000000,2500000"
 # The final settings for the ablation and vanilla runs: task3_e1's, without the three techniques. 1M steps (spec 4.1).
 FINAL="$PONG --lr 0.00005 --memory-size 500000 --max-env-steps 1000000"
+# task3_e1e3 won (last-10 mean 19.01), so these are the settings for the ablation runs that the report uses.
+FINAL2="$FINAL --adam-eps 0.00015"
 
 case "$1" in
   speed)        # a short test: how many environment steps per second on this machine
@@ -81,6 +83,14 @@ case "$1" in
     python run_experiment.py --name f1_no_multistep $FINAL --double --per ;;
   f2_vanilla)      # Spec 2.3 and Task 2: vanilla DQN at the final settings (E1), for a fair comparison
     python run_experiment.py --name f2_vanilla $FINAL ;;
+  f1b_no_double)    # Spec 4.1, ablation at the final settings (E1 and E3): without Double DQN
+    python run_experiment.py --name f1b_no_double $FINAL2 --per --n-step 3 ;;
+  f1b_no_per)       # Spec 4.1, ablation at the final settings (E1 and E3): without PER
+    python run_experiment.py --name f1b_no_per $FINAL2 --double --n-step 3 ;;
+  f1b_no_multistep) # Spec 4.1, ablation at the final settings (E1 and E3): with 1-step returns
+    python run_experiment.py --name f1b_no_multistep $FINAL2 --double --per ;;
+  f2b_vanilla)      # Spec 2.3 and Task 2: vanilla DQN at the final settings (E1 and E3)
+    python run_experiment.py --name f2b_vanilla $FINAL2 ;;
   *)
     echo "Usage: bash experiments.sh <run>. The runs are the names in this file."
     exit 1 ;;

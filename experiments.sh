@@ -95,6 +95,8 @@ case "$1" in
     python run_experiment.py --name f1b_no_multistep $FINAL2 --double --per ;;
   f2b_vanilla)      # Spec 2.3 and Task 2: vanilla DQN at the final settings (E1 and E3)
     python run_experiment.py --name f2b_vanilla $FINAL2 ;;
+  f2b_vanilla_s1)   # Task 2: vanilla DQN at the final settings, second seed (f2b_vanilla beat task2: 16.1 against 15.55)
+    python run_experiment.py --name f2b_vanilla_s1 $FINAL2 --seed 1 ;;
   *)
     echo "Usage: bash experiments.sh <run>. The runs are the names in this file."
     exit 1 ;;

@@ -75,6 +75,10 @@ case "$1" in
     python run_experiment.py --name task3_e1e3_s1 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 1 ;;
   task3_e1e3_s2) # E1 and E3 together, third seed
     python run_experiment.py --name task3_e1e3_s2 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 2 ;;
+  task3_e1e3_s3) # E1 and E3 together, fourth seed: more chances of 19 by 1M (17%, spec 4.2.2)
+    python run_experiment.py --name task3_e1e3_s3 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 3 ;;
+  task3_e1e3_s4) # E1 and E3 together, fifth seed
+    python run_experiment.py --name task3_e1e3_s4 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 4 ;;
   f1_no_double)    # Spec 4.1, ablation at the final settings (E1): without Double DQN
     python run_experiment.py --name f1_no_double $FINAL --per --n-step 3 ;;
   f1_no_per)       # Spec 4.1, ablation at the final settings (E1): without PER

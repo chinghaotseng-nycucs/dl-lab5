@@ -92,19 +92,19 @@ case "$1" in
     python run_experiment.py --name task3_e1e3_s9 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 9 \
       --max-env-steps 1000000 --snapshot-steps 600000,1000000 ;;
   task3_e1e3_s10) # E1 and E3 together, 1M only: more chances of a 1M snapshot that reaches 19 (17%)
-    python run_experiment.py --name task3_e1e3_s10 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 10 \\
+    python run_experiment.py --name task3_e1e3_s10 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 10 \
       --max-env-steps 1000000 --snapshot-steps 600000,1000000 ;;
   task3_e1e3_s11) # E1 and E3 together, 1M only
-    python run_experiment.py --name task3_e1e3_s11 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 11 \\
+    python run_experiment.py --name task3_e1e3_s11 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 11 \
       --max-env-steps 1000000 --snapshot-steps 600000,1000000 ;;
   task3_e1e3_s12) # E1 and E3 together, 1M only
-    python run_experiment.py --name task3_e1e3_s12 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 12 \\
+    python run_experiment.py --name task3_e1e3_s12 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 12 \
       --max-env-steps 1000000 --snapshot-steps 600000,1000000 ;;
   task3_e1e3_s13) # E1 and E3 together, 1M only
-    python run_experiment.py --name task3_e1e3_s13 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 13 \\
+    python run_experiment.py --name task3_e1e3_s13 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 13 \
       --max-env-steps 1000000 --snapshot-steps 600000,1000000 ;;
   task3_e1e3_s14) # E1 and E3 together, 1M only
-    python run_experiment.py --name task3_e1e3_s14 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 14 \\
+    python run_experiment.py --name task3_e1e3_s14 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 14 \
       --max-env-steps 1000000 --snapshot-steps 600000,1000000 ;;
   f1_no_double)    # Spec 4.1, ablation at the final settings (E1): without Double DQN
     python run_experiment.py --name f1_no_double $FINAL --per --n-step 3 ;;

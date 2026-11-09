@@ -1,7 +1,7 @@
 #!/bin/bash
 # The training commands of Lab5. Usage: bash experiments.sh <run>
 #   Runs: speed, task1, task2, task3, no_double, no_per, no_multistep, task3_imp_a to c, task3_r1, task3_e1 to e7,
-#   task3_e1e3_s1 to s14, task3_g0 to g4, f1_*, f1b_*, f2_*, f2b_*
+#   task3_e1e3_s1 to s14, task3_g0 to g4, task3_h1 to h3, f1_*, f1b_*, f2_*, f2b_*
 # The settings here are my choices. The spec fixes only the tasks and the snapshot steps (spec 2 and 4.2.2).
 set -e
 
@@ -120,6 +120,14 @@ case "$1" in
     python run_experiment.py --name task3_g3 $G --train-per-step 2 --epsilon-decay 0.99999 --per-beta-steps 2000000 ;;
   task3_g4)      # G4: an earlier start: learning from 5,000 stored steps, epsilon at 0.02 by about 50k updates
     python run_experiment.py --name task3_g4 $G --replay-start-size 5000 --epsilon-decay 0.99992 ;;
+  task3_h1)      # H1: 4 updates per step with random shifts and resets every 40k updates (SR-SPR, BBF), none after 500k
+    python run_experiment.py --name task3_h1 $G --train-per-step 4 --epsilon-decay 0.999995 --per-beta-steps 4000000 \
+      --augment-pad 4 --reset-every 40000 --reset-keep 0.8 --reset-stop 500000 ;;
+  task3_h2)      # H2: as H1 with 2 updates per step
+    python run_experiment.py --name task3_h2 $G --train-per-step 2 --epsilon-decay 0.99999 --per-beta-steps 2000000 \
+      --augment-pad 4 --reset-every 40000 --reset-keep 0.8 --reset-stop 500000 ;;
+  task3_h3)      # H3: AdamW weight decay 0.1 (BBF), 1 update per step
+    python run_experiment.py --name task3_h3 $G --weight-decay 0.1 ;;
   f1_no_double)    # Spec 4.1, ablation at the final settings (E1): without Double DQN
     python run_experiment.py --name f1_no_double $FINAL --per --n-step 3 ;;
   f1_no_per)       # Spec 4.1, ablation at the final settings (E1): without PER

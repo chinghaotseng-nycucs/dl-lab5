@@ -38,7 +38,7 @@ import numpy as np
 import torch
 import wandb
 
-from dqn import DQNAgent, PrioritizedReplayBuffer
+from dqn import DQN, DQNAgent, PrioritizedReplayBuffer, init_weights
 
 RESUME_EVERY = 50000  # environment steps between two saves of resume.pt
 
@@ -188,7 +188,12 @@ class LabAgent(DQNAgent):
             args.augment_pad,
         )
         # The TA's __init__ uses Adam's default eps, 1e-8. Replacing it here keeps dqn.py unchanged (report E3).
-        self.optimizer = torch.optim.Adam(self.q_net.parameters(), lr=args.lr, eps=args.adam_eps)
+        self.lr, self.adam_eps, self.weight_decay = args.lr, args.adam_eps, args.weight_decay
+        self.optimizer = self.make_optimizer()
+        self.reset_every = args.reset_every  # 0 = never. Updates between two network resets (report H)
+        self.reset_keep = args.reset_keep  # share of the old conv weights kept at a reset (SR-SPR: 0.8)
+        self.reset_stop = args.reset_stop  # no reset after this many environment steps, so the snapshots recover
+        self.resets_done = 0
         self.train_every = args.train_every
         self.train_calls = 0  # how many times run() has asked for an update
         self.first_19_saved = not is_pong  # the target of 19 exists only in Pong (spec 4.2.2)
@@ -219,7 +224,40 @@ class LabAgent(DQNAgent):
         """
         self.train_calls += 1
         if self.train_calls % self.train_every == 0:
+            updates_before = self.train_count
             super().train()
+            updated = self.train_count > updates_before  # False while the memory is below replay_start_size
+            if updated and self.reset_every and self.train_count % self.reset_every == 0:
+                if self.reset_stop == 0 or self.env_count < self.reset_stop:  # 0 = no limit
+                    self.reset_network()
+
+    def make_optimizer(self):
+        """Adam as in E3, or AdamW when --weight-decay is set (BBF uses 0.1; report H)."""
+        if self.weight_decay > 0:
+            return torch.optim.AdamW(
+                self.q_net.parameters(), lr=self.lr, eps=self.adam_eps, weight_decay=self.weight_decay
+            )
+        return torch.optim.Adam(self.q_net.parameters(), lr=self.lr, eps=self.adam_eps)
+
+    def reset_network(self):
+        """Periodic reset (Nikishin et al. 2022, SR-SPR, BBF), so that many updates per step stay useful.
+
+        The two Linear layers (network.7 and network.9) start again from new random weights. The conv layers keep
+        reset_keep of their weights and move the rest toward new random weights ("shrink and perturb").
+        The memory is kept. The target network copies the result, and Adam's running averages start again.
+        """
+        fresh = DQN(self.num_actions).to(self.device)
+        fresh.apply(init_weights)  # the TA's initialization, as for the first network
+        with torch.no_grad():  # a reset is not a training step, so no gradient
+            for (name, weight), new in zip(self.q_net.named_parameters(), fresh.parameters()):
+                if name.startswith(("network.7.", "network.9.")):
+                    weight.copy_(new)
+                else:
+                    weight.mul_(self.reset_keep).add_(new, alpha=1 - self.reset_keep)
+        self.target_net.load_state_dict(self.q_net.state_dict())
+        self.optimizer = self.make_optimizer()
+        self.resets_done += 1
+        print(f"[Reset {self.resets_done}] at {self.env_count} env steps, {self.train_count} updates", flush=True)
 
     def evaluate(self):
         """Average score over 20 games, seeds 0 to 19, with no random actions (spec 4.2.2).
@@ -390,6 +428,10 @@ def parse_args():
     parser.add_argument("--priority-clip", type=float, default=0.0)  # default 0, no limit (E5)
     parser.add_argument("--point-ends-target", action="store_true")  # default off (E7)
     parser.add_argument("--augment-pad", type=int, default=0)  # default 0, off; DrQ uses 4 (report G1)
+    parser.add_argument("--weight-decay", type=float, default=0.0)  # default 0, plain Adam; > 0 uses AdamW (H)
+    parser.add_argument("--reset-every", type=int, default=0)  # default 0, never; updates between resets (H)
+    parser.add_argument("--reset-keep", type=float, default=0.8)  # default 0.8, share of conv weights kept (H)
+    parser.add_argument("--reset-stop", type=int, default=0)  # default 0, no limit; no reset from this env step (H)
     args = parser.parse_args()
     if args.max_env_steps % 1000 != 0:
         parser.error("--max-env-steps must be a multiple of 1000: run() only checks it every 1000 steps")

@@ -167,6 +167,44 @@ def test_per_fast_sampling():
     print(f"       PER sample() at 500,000 entries: {ms:.2f} ms per batch")
 
 
+def test_resets_and_weight_decay():
+    """--reset-every, --reset-keep and --weight-decay (Task 3 report H)."""
+    torch.manual_seed(0)
+    agent = SimpleNamespace(
+        num_actions=6,
+        device=torch.device("cpu"),
+        lr=5e-5,
+        adam_eps=1.5e-4,
+        weight_decay=0.1,
+        reset_keep=0.8,
+        resets_done=0,
+        env_count=123,
+        train_count=40000,
+    )
+    agent.q_net = DQN(6)
+    agent.target_net = DQN(6)
+    agent.make_optimizer = lambda: run_experiment.LabAgent.make_optimizer(agent)
+    agent.optimizer = agent.make_optimizer()
+    check("H: --weight-decay uses AdamW", type(agent.optimizer).__name__ == "AdamW")
+    old = {k: v.clone() for k, v in agent.q_net.state_dict().items()}
+    agent.q_net(torch.rand(2, 4, 84, 84) * 255).sum().backward()
+    agent.optimizer.step()
+    run_experiment.LabAgent.reset_network(agent)
+    new = agent.q_net.state_dict()
+    head_changed = all(not torch.equal(old[k], new[k]) for k in old if k.startswith(("network.7.", "network.9.")))
+    # A kept conv weight is 0.8 * old + 0.2 * random, so it stays close to the old one but not equal.
+    gap = (new["network.0.weight"] - old["network.0.weight"]).abs().mean() / old["network.0.weight"].abs().mean()
+    check("H: the Linear layers start again", head_changed)
+    check("H: conv layers keep 80 percent", 0.05 < gap.item() < 0.6, f"relative change {gap.item():.2f}")
+    check(
+        "H: target copies the reset network",
+        all(torch.equal(new[k], agent.target_net.state_dict()[k]) for k in new),
+    )
+    check("H: optimizer starts again", len(agent.optimizer.state) == 0 and agent.resets_done == 1)
+    agent.weight_decay = 0.0
+    check("H off: plain Adam", type(agent.make_optimizer()).__name__ == "Adam")
+
+
 def test_random_shift():
     """--augment-pad: each training copy moves by at most pad pixels; the stored frames do not change (G1)."""
     np.random.seed(3)
@@ -395,6 +433,7 @@ def main():
     test_network_shapes()
     test_per()
     test_random_shift()
+    test_resets_and_weight_decay()
     test_n_step()
     test_train()
     test_experiment_flags()

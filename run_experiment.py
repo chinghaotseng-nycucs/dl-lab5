@@ -76,8 +76,10 @@ class ReplayMemory:
         beta_steps,
         priority_clip=0.0,
         point_ends_target=False,
+        augment_pad=0,
     ):
         self.gamma = gamma
+        self.augment_pad = augment_pad  # 0 = off. Pixels a training frame may move by (DrQ random shift). Extra, G1
         self.priority_clip = priority_clip  # 0 = no limit. Extra, Task 3 report E5
         self.point_ends_target = point_ends_target  # False = only the end of a game ends a target. Extra, report E7
         self.n_step = n_step  # 1 = plain DQN
@@ -128,9 +130,30 @@ class ReplayMemory:
             fraction = min(1.0, self.samples_drawn / self.beta_steps)
             self.buffer.beta = self.beta_start + (self.beta_end - self.beta_start) * fraction
             self.samples_drawn += 1
-            return self.buffer.sample(batch_size)
-        batch = random.sample(self.buffer, batch_size)  # CORE: uniform sampling
-        return batch, None, np.ones(batch_size, dtype=np.float32)
+            batch, indices, weights = self.buffer.sample(batch_size)
+        else:
+            batch = random.sample(self.buffer, batch_size)  # CORE: uniform sampling
+            indices, weights = None, np.ones(batch_size, dtype=np.float32)
+        if self.augment_pad > 0:
+            batch = self.random_shift(batch)
+        return batch, indices, weights
+
+    def random_shift(self, batch):
+        """Move each state and next state by up to augment_pad pixels, in training only (DrQ, Task 3 report G1).
+
+        The memory keeps the real frames; only the copies in this batch move. The 4 stacked frames of one state
+        move together, and a state and its next state move independently, as in DrQ.
+        """
+        p = self.augment_pad
+        states, actions, rewards, next_states, dones = zip(*batch)
+        frames = np.stack(states + next_states)  # (2B, 4, 84, 84): all states, then all next states
+        # mode="edge" repeats the border pixels into the new margin: (2B, 4, 84 + 2p, 84 + 2p)
+        padded = np.pad(frames, ((0, 0), (0, 0), (p, p), (p, p)), mode="edge")
+        size = frames.shape[-1]  # 84
+        offsets = np.random.randint(0, 2 * p + 1, size=(len(frames), 2))  # (2B, 2) row and column of each crop
+        moved = [padded[k, :, dy : dy + size, dx : dx + size] for k, (dy, dx) in enumerate(offsets)]
+        b = len(batch)
+        return list(zip(moved[:b], actions, rewards, moved[b:], dones))
 
     def update_priorities(self, indices, errors):
         """Pass the new error sizes to the PER buffer. It does nothing with uniform sampling."""
@@ -162,6 +185,7 @@ class LabAgent(DQNAgent):
             args.per_beta_steps,
             args.priority_clip,
             args.point_ends_target,
+            args.augment_pad,
         )
         # The TA's __init__ uses Adam's default eps, 1e-8. Replacing it here keeps dqn.py unchanged (report E3).
         self.optimizer = torch.optim.Adam(self.q_net.parameters(), lr=args.lr, eps=args.adam_eps)
@@ -365,6 +389,7 @@ def parse_args():
     parser.add_argument("--adam-eps", type=float, default=1e-8)  # default 1e-8, Adam's own default (E3)
     parser.add_argument("--priority-clip", type=float, default=0.0)  # default 0, no limit (E5)
     parser.add_argument("--point-ends-target", action="store_true")  # default off (E7)
+    parser.add_argument("--augment-pad", type=int, default=0)  # default 0, off; DrQ uses 4 (report G1)
     args = parser.parse_args()
     if args.max_env_steps % 1000 != 0:
         parser.error("--max-env-steps must be a multiple of 1000: run() only checks it every 1000 steps")

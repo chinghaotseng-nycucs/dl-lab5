@@ -10,6 +10,7 @@ import random
 import shutil
 import subprocess
 import sys
+import time
 from types import SimpleNamespace
 
 import numpy as np
@@ -117,15 +118,90 @@ def test_per():
     check("page 8 Step 5: the oldest is replaced", buffer.buffer == ["t3", "t1", "t2"] and buffer.pos == 1)
     np.random.seed(1)
     batch, indices, weights = buffer.sample(2)
-    check("page 8 Step 5: sample", batch == ["t3", "t1"] and list(indices) == [0, 1] and close(weights, [0.7195, 1.0]))
-    buffer.update_priorities(indices, [0.2, 0.3])
+    p = np.array([2.01, 0.51, 0.11]) ** 0.6 / (np.array([2.01, 0.51, 0.11]) ** 0.6).sum()  # the exact P(i)
+    expected = (3 * p[indices]) ** -0.4
+    check(
+        "page 8 Step 5: sample",
+        batch == [buffer.buffer[i] for i in indices] and close(weights, expected / expected.max(), 1e-5),
+    )
+    buffer.update_priorities([0, 1], [0.2, 0.3])
     check("page 8 Step 5: update", close(buffer.priorities, [0.21, 0.31, 0.11]))
+    check("page 8: stored p ** alpha follows the update", close(buffer.scaled, buffer.priorities**0.6, 1e-9))
+    test_per_fast_sampling()
 
-    big = PrioritizedReplayBuffer(100000, alpha=0.6, beta=0.4)
-    big.buffer = [0] * 100000
-    np.random.seed(0)
-    big.priorities[:] = np.random.random(100000) + 0.01
-    check("page 8: sampling works at 100,000 entries", big.sample(32)[1].shape == (32,))
+
+def test_per_fast_sampling():
+    """The roulette-wheel sample(): the same chances and IS weights as the old np.random.choice version."""
+    np.random.seed(2)
+    buffer = PrioritizedReplayBuffer(50, alpha=0.6, beta=0.4)
+    for i in range(70):  # 70 > 50, so the ring wraps and 20 places are overwritten
+        buffer.add(i, np.random.exponential())
+    buffer.update_priorities(np.arange(0, 50, 3), np.random.exponential(size=17) * 5)
+    old_scaled = buffer.priorities.astype(np.float64) ** 0.6  # what the old sample() computed each time
+    check("PER fast: stored p ** alpha after wrap and update", close(buffer.scaled, old_scaled, 1e-12))
+    old_chances = old_scaled / old_scaled.sum()
+    draws = np.concatenate([buffer.sample(32)[1] for _ in range(20000)])  # 640,000 draws
+    frequency = np.bincount(draws, minlength=50) / draws.size
+    check(
+        "PER fast: draw frequency = old chances (640k draws)",
+        np.abs(frequency - old_chances).max() < 0.002,
+        f"largest gap {np.abs(frequency - old_chances).max():.5f}",
+    )
+    buffer.beta = 0.7
+    batch, indices, weights = buffer.sample(32)
+    old_weights = (50 * old_chances[indices]) ** -0.7
+    check("PER fast: IS weights = old formula", close(weights, old_weights / old_weights.max(), 1e-5))
+    check("PER fast: batch matches indices", batch == [buffer.buffer[i] for i in indices])
+
+    big = PrioritizedReplayBuffer(500000, alpha=0.6, beta=0.4)
+    for i in range(1000):
+        big.add(i, 1.0)
+    big.buffer = list(range(500000))  # fill the rest by hand: add() 500k times would take long
+    big.priorities[:] = np.random.random(500000).astype(np.float32) + 0.01
+    big.scaled[:] = big.priorities.astype(np.float64) ** 0.6
+    start = time.time()
+    for _ in range(200):
+        indices = big.sample(32)[1]
+    ms = (time.time() - start) / 200 * 1000
+    check("PER fast: sampling at 500,000 entries", indices.shape == (32,) and indices.max() < 500000, f"{ms:.2f} ms")
+    print(f"       PER sample() at 500,000 entries: {ms:.2f} ms per batch")
+
+
+def test_random_shift():
+    """--augment-pad: each training copy moves by at most pad pixels; the stored frames do not change (G1)."""
+    np.random.seed(3)
+    memory = ReplayMemory(100, 0.99, 1, False, 0.6, 0.4, 1.0, 1000, augment_pad=4)
+    states = [np.random.randint(0, 256, size=(4, 84, 84), dtype=np.uint8) for _ in range(9)]
+    for k in range(8):
+        memory.append((states[k], 1, 0.0, states[k + 1], False))
+    stored = [s.copy() for s in states]
+    batch, _, _ = memory.sample(8)
+    shapes_ok = all(b[0].shape == (4, 84, 84) and b[0].dtype == np.uint8 and b[3].shape == (4, 84, 84) for b in batch)
+    check("G1: shifted frames keep shape and type", shapes_ok)
+    check("G1: stored frames unchanged", all((a == b).all() for a, b in zip(states, stored)))
+
+    def offset_of(moved, original):
+        padded = np.pad(original, ((0, 0), (4, 4), (4, 4)), mode="edge")
+        for dy in range(9):
+            for dx in range(9):
+                if (padded[:, dy : dy + 84, dx : dx + 84] == moved).all():
+                    return dy - 4, dx - 4
+        return None
+
+    # Find each moved state among the originals and check the shift is within 4 pixels.
+    ok = True
+    pairs = []
+    for b in batch:
+        hits = [offset_of(b[0], s) for s in states[:8]]
+        hit = next((h for h in hits if h is not None), None)
+        ok = ok and hit is not None and max(abs(hit[0]), abs(hit[1])) <= 4
+        pairs.append(hit)
+    check("G1: each state is an original moved by at most 4 pixels", ok, str(pairs[:3]))
+    plain = ReplayMemory(100, 0.99, 1, False, 0.6, 0.4, 1.0, 1000)
+    for k in range(8):
+        plain.append((states[k], 1, 0.0, states[k + 1], False))
+    batch, _, _ = plain.sample(8)
+    check("G1 off: frames returned unchanged", all(any((b[0] == s).all() for s in states) for b in batch))
 
 
 def test_n_step():
@@ -318,6 +394,7 @@ def main():
     test_only_todos_changed()
     test_network_shapes()
     test_per()
+    test_random_shift()
     test_n_step()
     test_train()
     test_experiment_flags()

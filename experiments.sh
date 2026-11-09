@@ -1,6 +1,7 @@
 #!/bin/bash
 # The training commands of Lab5. Usage: bash experiments.sh <run>
-#   Runs: speed, task1, task2, task3, no_double, no_per, no_multistep, task3_imp_a to c, task3_r1, task3_e1 to e7
+#   Runs: speed, task1, task2, task3, no_double, no_per, no_multistep, task3_imp_a to c, task3_r1, task3_e1 to e7,
+#   task3_e1e3_s1 to s14, task3_g0 to g4, f1_*, f1b_*, f2_*, f2b_*
 # The settings here are my choices. The spec fixes only the tasks and the snapshot steps (spec 2 and 4.2.2).
 set -e
 
@@ -14,6 +15,9 @@ BEST="$PONG $FULL --lr 0.00005 --max-env-steps 2500000 --snapshot-steps 600000,1
 FINAL="$PONG --lr 0.00005 --memory-size 500000 --max-env-steps 1000000"
 # task3_e1e3 won (last-10 mean 19.01), so these are the settings for the ablation runs that the report uses.
 FINAL2="$FINAL --adam-eps 0.00015"
+# 11/9: the goal is 19 by 600k (20%, spec 4.2.2). G runs start from E1 + E3 and change one thing each.
+# They use the faster PER sampling (same chances, commit after 435a620), so G0 checks that it learns as before.
+G="$BEST --memory-size 500000 --adam-eps 0.00015"
 
 case "$1" in
   speed)        # a short test: how many environment steps per second on this machine
@@ -106,6 +110,16 @@ case "$1" in
   task3_e1e3_s14) # E1 and E3 together, 1M only
     python run_experiment.py --name task3_e1e3_s14 $BEST --memory-size 500000 --adam-eps 0.00015 --seed 14 \
       --max-env-steps 1000000 --snapshot-steps 600000,1000000 ;;
+  task3_g0)      # Control: E1 and E3 with the faster PER sampling. Does it learn like the old code?
+    python run_experiment.py --name task3_g0 $G ;;
+  task3_g1)      # G1: random shifts of up to 4 pixels on training batches (DrQ)
+    python run_experiment.py --name task3_g1 $G --augment-pad 4 ;;
+  task3_g2)      # G2: 10-step returns (DrQ uses 10, DER 20; the ablation showed multi-step matters most)
+    python run_experiment.py --name task3_g2 $G --n-step 10 ;;
+  task3_g3)      # G3: 2 updates per step. Epsilon and beta keep their schedules in environment steps
+    python run_experiment.py --name task3_g3 $G --train-per-step 2 --epsilon-decay 0.99999 --per-beta-steps 2000000 ;;
+  task3_g4)      # G4: an earlier start: learning from 5,000 stored steps, epsilon at 0.02 by about 50k updates
+    python run_experiment.py --name task3_g4 $G --replay-start-size 5000 --epsilon-decay 0.99992 ;;
   f1_no_double)    # Spec 4.1, ablation at the final settings (E1): without Double DQN
     python run_experiment.py --name f1_no_double $FINAL --per --n-step 3 ;;
   f1_no_per)       # Spec 4.1, ablation at the final settings (E1): without PER

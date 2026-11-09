@@ -120,11 +120,16 @@ class PrioritizedReplayBuffer:
         ########## YOUR CODE HERE (for Task 3) ########## 
         # Fundamentals page 8, Step 5. 0.01 = the spec's epsilon: a zero error can still be drawn (spec section 1).
         priority = abs(error) + 0.01  # CORE: priority
+        if not hasattr(self, "scaled"):
+            # Made on the first add, because __init__ is outside the TODOs. scaled[i] = priority ** alpha, kept
+            # up to date here and in update_priorities(), so sample() does not redo the power over the whole buffer.
+            self.scaled = np.zeros((self.capacity,), dtype=np.float64)
         if len(self.buffer) < self.capacity:
             self.buffer.append(transition)  # still filling up
         else:
             self.buffer[self.pos] = transition  # full: overwrite the oldest
         self.priorities[self.pos] = priority
+        self.scaled[self.pos] = float(self.priorities[self.pos]) ** self.alpha  # the spec's p_i ** alpha
         self.pos = (self.pos + 1) % self.capacity  # ring: the position wraps back to 0
         ########## END OF YOUR CODE (for Task 3) ########## 
         return 
@@ -132,11 +137,14 @@ class PrioritizedReplayBuffer:
         ########## YOUR CODE HERE (for Task 3) ########## 
         # Fundamentals page 8, Steps 2 and 3. B = batch_size.
         n = len(self.buffer)  # how many transitions are stored (the spec's N)
-        # [:n] keeps only the filled part. float64: np.random.choice needs the chances to sum to 1 very exactly.
-        scaled = self.priorities[:n].astype(np.float64) ** self.alpha  # (n)
-        chances = scaled / scaled.sum()  # CORE: sampling chance; (n), sums to 1. The spec's P(i)
-        indices = np.random.choice(n, batch_size, p=chances)  # (B) positions, drawn with those chances
-        weights = (n * chances[indices]) ** (-self.beta)  # CORE: IS weights; (B)
+        scaled = self.scaled[:n]  # (n) p_i ** alpha, stored by add() and update_priorities(); [:n] = the filled part
+        # A roulette wheel: transition i owns a segment of length scaled[i] on the line from 0 to the total.
+        cumulative = np.cumsum(scaled)  # (n) running total [s0, s0+s1, ...]; cumulative[-1] = the total
+        darts = np.random.random(batch_size) * cumulative[-1]  # (B) random points on [0, total)
+        # Binary search: the first i whose running total passes the point, so i is drawn with chance scaled[i] / total.
+        indices = np.minimum(np.searchsorted(cumulative, darts, side="right"), n - 1)  # CORE: sampling chance; (B)
+        chances = scaled[indices] / cumulative[-1]  # (B) the spec's P(i) of the drawn transitions
+        weights = (n * chances) ** (-self.beta)  # CORE: IS weights; (B)
         weights = weights / weights.max()  # normalize, so that a weight can only shrink a step (spec section 1)
         batch = [self.buffer[i] for i in indices]  # list comprehension: the B chosen transitions
         return batch, indices, weights.astype(np.float32)
@@ -147,6 +155,7 @@ class PrioritizedReplayBuffer:
         # Fundamentals page 8, Step 5. zip walks the two lists side by side.
         for i, error in zip(indices, errors):
             self.priorities[i] = abs(error) + 0.01  # the same 0.01 as in add()
+            self.scaled[i] = float(self.priorities[i]) ** self.alpha  # keep the stored p_i ** alpha in step
         ########## END OF YOUR CODE (for Task 3) ########## 
         return
         

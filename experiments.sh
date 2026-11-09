@@ -136,6 +136,8 @@ case "$1" in
     python run_experiment.py --name task3_g4_s5 $G --replay-start-size 5000 --epsilon-decay 0.99992 --seed 5 ;;
   task3_g4_s6)   # G4, seed 6
     python run_experiment.py --name task3_g4_s6 $G --replay-start-size 5000 --epsilon-decay 0.99992 --seed 6 ;;
+  task3_g4_s7)   # G4, seed 7
+    python run_experiment.py --name task3_g4_s7 $G --replay-start-size 5000 --epsilon-decay 0.99992 --seed 7 ;;
   task3_h1)      # H1: 4 updates per step with random shifts and resets every 40k updates (SR-SPR, BBF), none after 500k
     python run_experiment.py --name task3_h1 $G --train-per-step 4 --epsilon-decay 0.999995 --per-beta-steps 4000000 \
       --augment-pad 4 --reset-every 40000 --reset-keep 0.8 --reset-stop 500000 ;;

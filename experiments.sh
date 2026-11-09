@@ -122,6 +122,8 @@ case "$1" in
     python run_experiment.py --name task3_g4 $G --replay-start-size 5000 --epsilon-decay 0.99992 ;;
   task3_g2_s1)   # G2, second seed: 10-step returns gave the best 600k snapshot of the G wave (16.25, control 2.5)
     python run_experiment.py --name task3_g2_s1 $G --n-step 10 --seed 1 ;;
+  task3_g2_s2)   # G2, third seed of 10-step returns
+    python run_experiment.py --name task3_g2_s2 $G --n-step 10 --seed 2 ;;
   task3_h1)      # H1: 4 updates per step with random shifts and resets every 40k updates (SR-SPR, BBF), none after 500k
     python run_experiment.py --name task3_h1 $G --train-per-step 4 --epsilon-decay 0.999995 --per-beta-steps 4000000 \
       --augment-pad 4 --reset-every 40000 --reset-keep 0.8 --reset-stop 500000 ;;

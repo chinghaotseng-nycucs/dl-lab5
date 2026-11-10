@@ -196,6 +196,15 @@ case "$1" in
   task3_w4_s11)   # W4, seed 11: 4x wide network, early start, 600k only
     python run_experiment.py --name task3_w4_s11 $G --replay-start-size 5000 --epsilon-decay 0.99992 --width 4 --seed 11 \
       --max-env-steps 600000 --snapshot-steps 600000 --dense-eval-from 100000 --dense-eval-to 600000 ;;
+  task3_w4_s12)   # W4, seed 12: 4x wide network, early start, 600k only
+    python run_experiment.py --name task3_w4_s12 $G --replay-start-size 5000 --epsilon-decay 0.99992 --width 4 --seed 12 \
+      --max-env-steps 600000 --snapshot-steps 600000 --dense-eval-from 100000 --dense-eval-to 600000 ;;
+  task3_w4_s13)   # W4, seed 13: 4x wide network, early start, 600k only
+    python run_experiment.py --name task3_w4_s13 $G --replay-start-size 5000 --epsilon-decay 0.99992 --width 4 --seed 13 \
+      --max-env-steps 600000 --snapshot-steps 600000 --dense-eval-from 100000 --dense-eval-to 600000 ;;
+  task3_w4_s14)   # W4, seed 14: 4x wide network, early start, 600k only
+    python run_experiment.py --name task3_w4_s14 $G --replay-start-size 5000 --epsilon-decay 0.99992 --width 4 --seed 14 \
+      --max-env-steps 600000 --snapshot-steps 600000 --dense-eval-from 100000 --dense-eval-to 600000 ;;
   task3_h1)      # H1: 4 updates per step with random shifts and resets every 40k updates (SR-SPR, BBF), none after 500k
     python run_experiment.py --name task3_h1 $G --train-per-step 4 --epsilon-decay 0.999995 --per-beta-steps 4000000 \
       --augment-pad 4 --reset-every 40000 --reset-keep 0.8 --reset-stop 500000 ;;

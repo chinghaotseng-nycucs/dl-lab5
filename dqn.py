@@ -22,27 +22,29 @@ gym.register_envs(ale_py)
 
 def init_weights(m):
     if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
-        nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')
+        nn.init.kaiming_uniform_(m.weight, nonlinearity="relu")
         if m.bias is not None:
             nn.init.constant_(m.bias, 0)
 
+
 class DQN(nn.Module):
     """
-        Design the architecture of your deep Q network
-        - Input size is the same as the state dimension; the output size is the same as the number of actions
-        - Feel free to change the architecture (e.g. number of hidden layers and the width of each hidden layer) as you like
-        - Feel free to add any member variables/functions whenever needed
+    Design the architecture of your deep Q network
+    - Input size is the same as the state dimension; the output size is the same as the number of actions
+    - Feel free to change the architecture (e.g. number of hidden layers and the width of each hidden layer) as you like
+    - Feel free to add any member variables/functions whenever needed
     """
+
     def __init__(self, num_actions):
         super(DQN, self).__init__()
-        # An example: 
-        #self.network = nn.Sequential(
+        # An example:
+        # self.network = nn.Sequential(
         #    nn.Linear(input_dim, 64),
         #    nn.ReLU(),
         #    nn.Linear(64, 64),
         #    nn.ReLU(),
         #    nn.Linear(64, num_actions)
-        #)       
+        # )
         ########## YOUR CODE HERE (5~10 lines) ##########
         # The template passes only num_actions, so it also tells the two games apart:
         # CartPole-v1 has 2 actions, ALE/Pong-v5 has 6 (env.action_space.n).
@@ -79,13 +81,16 @@ class DQN(nn.Module):
         ########## END OF YOUR CODE ##########
 
     def forward(self, x):
-        return self.network(x / self.input_scale)  # CORE: scale pixels to 0-1. [MY WORK] was self.network(x); input_scale is 255 for Pong, 1 for CartPole, so training matches test_model.py
+        return self.network(
+            x / self.input_scale
+        )  # CORE: scale pixels to 0-1. [MY WORK] was self.network(x); input_scale is 255 for Pong, 1 for CartPole, so training matches test_model.py
 
 
 class AtariPreprocessor:
     """
-        Preprocesing the state input of DQN for Atari
-    """    
+    Preprocesing the state input of DQN for Atari
+    """
+
     def __init__(self, frame_stack=4):
         self.frame_stack = frame_stack
         self.frames = deque(maxlen=frame_stack)
@@ -108,9 +113,10 @@ class AtariPreprocessor:
 
 class PrioritizedReplayBuffer:
     """
-        Prioritizing the samples in the replay memory by the Bellman error
-        See the paper (Schaul et al., 2016) at https://arxiv.org/abs/1511.05952
-    """ 
+    Prioritizing the samples in the replay memory by the Bellman error
+    See the paper (Schaul et al., 2016) at https://arxiv.org/abs/1511.05952
+    """
+
     def __init__(self, capacity, alpha=0.6, beta=0.4):
         self.capacity = capacity
         self.alpha = alpha
@@ -120,7 +126,7 @@ class PrioritizedReplayBuffer:
         self.pos = 0
 
     def add(self, transition, error):
-        ########## YOUR CODE HERE (for Task 3) ########## 
+        ########## YOUR CODE HERE (for Task 3) ##########
         # Fundamentals page 8, Step 5. 0.01 = the spec's epsilon: a zero error can still be drawn (spec section 1).
         priority = abs(error) + 0.01  # CORE: priority
         if not hasattr(self, "scaled"):
@@ -134,10 +140,11 @@ class PrioritizedReplayBuffer:
         self.priorities[self.pos] = priority
         self.scaled[self.pos] = float(self.priorities[self.pos]) ** self.alpha  # the spec's p_i ** alpha
         self.pos = (self.pos + 1) % self.capacity  # ring: the position wraps back to 0
-        ########## END OF YOUR CODE (for Task 3) ########## 
-        return 
+        ########## END OF YOUR CODE (for Task 3) ##########
+        return
+
     def sample(self, batch_size):
-        ########## YOUR CODE HERE (for Task 3) ########## 
+        ########## YOUR CODE HERE (for Task 3) ##########
         # Fundamentals page 8, Steps 2 and 3. B = batch_size.
         n = len(self.buffer)  # how many transitions are stored (the spec's N)
         scaled = self.scaled[:n]  # (n) p_i ** alpha, stored by add() and update_priorities(); [:n] = the filled part
@@ -151,17 +158,18 @@ class PrioritizedReplayBuffer:
         weights = weights / weights.max()  # normalize, so that a weight can only shrink a step (spec section 1)
         batch = [self.buffer[i] for i in indices]  # list comprehension: the B chosen transitions
         return batch, indices, weights.astype(np.float32)
-        ########## END OF YOUR CODE (for Task 3) ########## 
+        ########## END OF YOUR CODE (for Task 3) ##########
         return
+
     def update_priorities(self, indices, errors):
-        ########## YOUR CODE HERE (for Task 3) ########## 
+        ########## YOUR CODE HERE (for Task 3) ##########
         # Fundamentals page 8, Step 5. zip walks the two lists side by side.
         for i, error in zip(indices, errors):
             self.priorities[i] = abs(error) + 0.01  # the same 0.01 as in add()
             self.scaled[i] = float(self.priorities[i]) ** self.alpha  # keep the stored p_i ** alpha in step
-        ########## END OF YOUR CODE (for Task 3) ########## 
+        ########## END OF YOUR CODE (for Task 3) ##########
         return
-        
+
 
 class DQNAgent:
     def __init__(self, env_name="CartPole-v1", args=None):
@@ -172,7 +180,6 @@ class DQNAgent:
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print("Using device:", self.device)
-
 
         self.q_net = DQN(self.num_actions).to(self.device)
         self.q_net.apply(init_weights)
@@ -217,7 +224,7 @@ class DQNAgent:
                 action = self.select_action(state)
                 next_obs, reward, terminated, truncated, _ = self.env.step(action)
                 done = terminated or truncated
-                
+
                 next_state = self.preprocessor.step(next_obs)
                 self.memory.append((state, action, reward, next_state, done))
 
@@ -229,42 +236,52 @@ class DQNAgent:
                 self.env_count += 1
                 step_count += 1
 
-                if self.env_count % 1000 == 0:                 
-                    print(f"[Collect] Ep: {ep} Step: {step_count} SC: {self.env_count} UC: {self.train_count} Eps: {self.epsilon:.4f}")
-                    wandb.log({
-                        "Episode": ep,
-                        "Step Count": step_count,
-                        "Env Step Count": self.env_count,
-                        "Update Count": self.train_count,
-                        "Epsilon": self.epsilon
-                    })
+                if self.env_count % 1000 == 0:
+                    print(
+                        f"[Collect] Ep: {ep} Step: {step_count} SC: {self.env_count} UC: {self.train_count} Eps: {self.epsilon:.4f}"
+                    )
+                    wandb.log(
+                        {
+                            "Episode": ep,
+                            "Step Count": step_count,
+                            "Env Step Count": self.env_count,
+                            "Update Count": self.train_count,
+                            "Epsilon": self.epsilon,
+                        }
+                    )
                     ########## YOUR CODE HERE  ##########
-                    # Add additional wandb logs for debugging if needed 
+                    # Add additional wandb logs for debugging if needed
                     # Spec 4.1, "how you use Weight & Bias". The self.last_ values are set at the end of train().
-                    wandb.log({
-                        "Env Step Count": self.env_count,
-                        "Loss": self.last_loss,
-                        "Q Mean": self.last_q_mean,
-                        "Bellman Error Mean": self.last_error_mean,
-                    })
+                    wandb.log(
+                        {
+                            "Env Step Count": self.env_count,
+                            "Loss": self.last_loss,
+                            "Q Mean": self.last_q_mean,
+                            "Bellman Error Mean": self.last_error_mean,
+                        }
+                    )
                     # env_count is a multiple of 1000 here, and so are 600k, 1M, ... (spec 4.2.2, Task 3).
                     self.save_files_at_this_step()  # in run_experiment.py
                     # Task 3 needs an exact step count, and the for loop above only counts games.
                     if self.env_count >= self.max_env_steps:  # max_env_steps: in run_experiment.py
                         return
-                    ########## END OF YOUR CODE ##########   
-            print(f"[Eval] Ep: {ep} Total Reward: {total_reward} SC: {self.env_count} UC: {self.train_count} Eps: {self.epsilon:.4f}")
-            wandb.log({
-                "Episode": ep,
-                "Total Reward": total_reward,
-                "Env Step Count": self.env_count,
-                "Update Count": self.train_count,
-                "Epsilon": self.epsilon
-            })
+                    ########## END OF YOUR CODE ##########
+            print(
+                f"[Eval] Ep: {ep} Total Reward: {total_reward} SC: {self.env_count} UC: {self.train_count} Eps: {self.epsilon:.4f}"
+            )
+            wandb.log(
+                {
+                    "Episode": ep,
+                    "Total Reward": total_reward,
+                    "Env Step Count": self.env_count,
+                    "Update Count": self.train_count,
+                    "Epsilon": self.epsilon,
+                }
+            )
             ########## YOUR CODE HERE  ##########
-            # Add additional wandb logs for debugging if needed 
-            
-            ########## END OF YOUR CODE ##########  
+            # Add additional wandb logs for debugging if needed
+
+            ########## END OF YOUR CODE ##########
             if ep % 100 == 0:
                 model_path = os.path.join(self.save_dir, f"model_ep{ep}.pt")
                 torch.save(self.q_net.state_dict(), model_path)
@@ -278,11 +295,9 @@ class DQNAgent:
                     torch.save(self.q_net.state_dict(), model_path)
                     print(f"Saved new best model to {model_path} with reward {eval_reward}")
                 print(f"[TrueEval] Ep: {ep} Eval Reward: {eval_reward:.2f} SC: {self.env_count} UC: {self.train_count}")
-                wandb.log({
-                    "Env Step Count": self.env_count,
-                    "Update Count": self.train_count,
-                    "Eval Reward": eval_reward
-                })
+                wandb.log(
+                    {"Env Step Count": self.env_count, "Update Count": self.train_count, "Eval Reward": eval_reward}
+                )
 
     def evaluate(self):
         obs, _ = self.test_env.reset()
@@ -301,17 +316,16 @@ class DQNAgent:
 
         return total_reward
 
-
     def train(self):
 
         if len(self.memory) < self.replay_start_size:
-            return 
-        
+            return
+
         # Decay function for epsilin-greedy exploration
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
         self.train_count += 1
-       
+
         ########## YOUR CODE HERE (<5 lines) ##########
         # Sample a mini-batch of (s,a,r,s',done) from the replay buffer
         # self.memory draws uniformly, or by priority with --per (ReplayMemory in run_experiment.py).
@@ -328,20 +342,22 @@ class DQNAgent:
         rewards = torch.tensor(rewards, dtype=torch.float32).to(self.device)
         dones = torch.tensor(dones, dtype=torch.float32).to(self.device)
         q_values = self.q_net(states).gather(1, actions.unsqueeze(1)).squeeze(1)  # CORE: Q-value of the taken action
-        
+
         ########## YOUR CODE HERE (~10 lines) ##########
-        # Implement the loss function of DQN and the gradient updates 
+        # Implement the loss function of DQN and the gradient updates
         # Step numbers follow fundamentals page 6. Every vector below has shape (B), B = batch size.
         # Step 1: the target. no_grad: it is a fixed label, so no gradient flows through it.
         with torch.no_grad():
             if self.double:
                 # Double DQN (page 7): the main network chooses, and the target network gives the value.
                 next_actions = self.q_net(next_states).argmax(1)  # (B, num_actions) -> (B)
-                next_q = self.target_net(next_states).gather(1, next_actions.unsqueeze(1)).squeeze(1)  # CORE: Double DQN target
+                next_q = (
+                    self.target_net(next_states).gather(1, next_actions.unsqueeze(1)).squeeze(1)
+                )  # CORE: Double DQN target
             else:
                 next_q = self.target_net(next_states).max(1)[0]  # .max(1)[0]: the largest value in each row
             # rewards already hold the n-step sum, and gamma ** n_step is plain gamma when n_step is 1 (page 9).
-            targets = rewards + self.gamma ** self.n_step * (1 - dones) * next_q  # CORE: Bellman target
+            targets = rewards + self.gamma**self.n_step * (1 - dones) * next_q  # CORE: Bellman target
         # Step 2: the Bellman error.
         errors = targets - q_values  # CORE: Bellman error and loss
         # Step 3: the loss. Without --per all weights are 1, so this is plain MSE (Mean Squared Error).
@@ -359,14 +375,16 @@ class DQNAgent:
         self.last_loss = loss.item()
         self.last_q_mean = q_values.mean().item()
         self.last_error_mean = errors.abs().mean().item()
-        ########## END OF YOUR CODE ##########  
+        ########## END OF YOUR CODE ##########
 
         if self.train_count % self.target_update_frequency == 0:
             self.target_net.load_state_dict(self.q_net.state_dict())
 
         # NOTE: Enable this part if "loss" is defined
         if self.train_count % 1000 == 0:
-            print(f"[Train #{self.train_count}] Loss: {loss.item():.4f} Q mean: {q_values.mean().item():.3f} std: {q_values.std().item():.3f}")
+            print(
+                f"[Train #{self.train_count}] Loss: {loss.item():.4f} Q mean: {q_values.mean().item():.3f} std: {q_values.std().item():.3f}"
+            )
 
 
 if __name__ == "__main__":

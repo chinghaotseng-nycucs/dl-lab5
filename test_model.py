@@ -11,6 +11,7 @@ import os
 from collections import deque
 import argparse
 
+
 class DQN(nn.Module):
     def __init__(self, input_channels, num_actions):
         super(DQN, self).__init__()
@@ -24,11 +25,13 @@ class DQN(nn.Module):
             nn.Flatten(),
             nn.Linear(64 * 7 * 7, 512),
             nn.ReLU(),
-            nn.Linear(512, num_actions)
+            nn.Linear(512, num_actions),
         )
 
     def forward(self, x):
         return self.network(x / 255.0)
+
+
 class AtariPreprocessor:
     def __init__(self, frame_stack=4):
         self.frame_stack = frame_stack
@@ -52,7 +55,8 @@ class AtariPreprocessor:
         self.frames.append(frame.copy())
         stacked = np.stack(self.frames, axis=0)
         return stacked
-        
+
+
 def evaluate(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -100,6 +104,7 @@ def evaluate(args):
             for f in frames:
                 video.append_data(f)
         print(f"Saved episode {ep} with total reward {total_reward} → {out_path}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

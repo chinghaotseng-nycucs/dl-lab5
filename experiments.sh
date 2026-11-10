@@ -148,6 +148,12 @@ case "$1" in
     python run_experiment.py --name task3_g4_s11 $G --replay-start-size 5000 --epsilon-decay 0.99992 --seed 11 ;;
   task3_g4_s12)   # G4, seed 12
     python run_experiment.py --name task3_g4_s12 $G --replay-start-size 5000 --epsilon-decay 0.99992 --seed 12 ;;
+  task3_g4_s13)   # G4, seed 13
+    python run_experiment.py --name task3_g4_s13 $G --replay-start-size 5000 --epsilon-decay 0.99992 --seed 13 ;;
+  task3_g4_s14)   # G4, seed 14
+    python run_experiment.py --name task3_g4_s14 $G --replay-start-size 5000 --epsilon-decay 0.99992 --seed 14 ;;
+  task3_g4_s15)   # G4, seed 15
+    python run_experiment.py --name task3_g4_s15 $G --replay-start-size 5000 --epsilon-decay 0.99992 --seed 15 ;;
   task3_h1)      # H1: 4 updates per step with random shifts and resets every 40k updates (SR-SPR, BBF), none after 500k
     python run_experiment.py --name task3_h1 $G --train-per-step 4 --epsilon-decay 0.999995 --per-beta-steps 4000000 \
       --augment-pad 4 --reset-every 40000 --reset-keep 0.8 --reset-stop 500000 ;;

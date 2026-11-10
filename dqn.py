@@ -61,17 +61,20 @@ class DQN(nn.Module):
             # Pong (Tasks 2 and 3): the same layers, in the same order, as test_model.py.
             # test_model.py loads weights by name (network.0, network.2, ...), so the order must match.
             self.input_scale = 255.0  # pixels are stored as 0-255, and the network must see 0-1
+            # width multiplies every layer's size (Task 3 report W). 1 = the same network as test_model.py.
+            # DQN.width is set by run_experiment.py and eval_snapshot.py, so DQN(num_actions) keeps its arguments.
+            w = getattr(DQN, "width", 1)
             self.network = nn.Sequential(  # CORE: network layers
-                nn.Conv2d(4, 32, kernel_size=8, stride=4),  # (B, 4, 84, 84) -> (B, 32, 20, 20)
+                nn.Conv2d(4, 32 * w, kernel_size=8, stride=4),  # (B, 4, 84, 84) -> (B, 32w, 20, 20)
                 nn.ReLU(),
-                nn.Conv2d(32, 64, kernel_size=4, stride=2),  # -> (B, 64, 9, 9)
+                nn.Conv2d(32 * w, 64 * w, kernel_size=4, stride=2),  # -> (B, 64w, 9, 9)
                 nn.ReLU(),
-                nn.Conv2d(64, 64, kernel_size=3, stride=1),  # -> (B, 64, 7, 7)
+                nn.Conv2d(64 * w, 64 * w, kernel_size=3, stride=1),  # -> (B, 64w, 7, 7)
                 nn.ReLU(),
-                nn.Flatten(),  # -> (B, 3136); 64 * 7 * 7 = 3136
-                nn.Linear(64 * 7 * 7, 512),  # -> (B, 512)
+                nn.Flatten(),  # -> (B, 3136w); 64 * 7 * 7 = 3136
+                nn.Linear(64 * w * 7 * 7, 512 * w),  # -> (B, 512w)
                 nn.ReLU(),
-                nn.Linear(512, num_actions),  # -> (B, 6), one Q-value per action
+                nn.Linear(512 * w, num_actions),  # -> (B, 6), one Q-value per action
             )
         ########## END OF YOUR CODE ##########
 

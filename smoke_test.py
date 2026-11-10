@@ -205,6 +205,20 @@ def test_resets_and_weight_decay():
     check("H off: plain Adam", type(agent.make_optimizer()).__name__ == "Adam")
 
 
+def test_width_and_dense_eval():
+    """--width multiplies the Pong network; width 1 is test_model.py's network (Task 3 report W)."""
+    plain = DQN(6)
+    check("W: width 1 has the template's 1,687,206 parameters", sum(p.numel() for p in plain.parameters()) == 1687206)
+    DQN.width = 2
+    wide = DQN(6)
+    DQN.width = 1
+    check("W: width 2 has 4x the parameters", sum(p.numel() for p in wide.parameters()) == 6724934)
+    check("W: width 2 keeps the layer names", list(plain.state_dict()) == list(wide.state_dict()))
+    check("W: width 2 output shape", wide(torch.rand(2, 4, 84, 84) * 255).shape == (2, 6))
+    cart = DQN(2)
+    check("W: CartPole network unchanged by width", sum(p.numel() for p in cart.parameters()) == 4610)
+
+
 def test_random_shift():
     """--augment-pad: each training copy moves by at most pad pixels; the stored frames do not change (G1)."""
     np.random.seed(3)
@@ -432,6 +446,7 @@ def main():
     test_only_todos_changed()
     test_network_shapes()
     test_per()
+    test_width_and_dense_eval()
     test_random_shift()
     test_resets_and_weight_decay()
     test_n_step()

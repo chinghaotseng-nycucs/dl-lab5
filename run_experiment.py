@@ -38,7 +38,7 @@ import numpy as np
 import torch
 import wandb
 
-from dqn import DQN, DQNAgent, PrioritizedReplayBuffer, init_weights
+from dqn import DQN, AtariPreprocessor, DQNAgent, PrioritizedReplayBuffer, init_weights
 
 RESUME_EVERY = 50000  # environment steps between two saves of resume.pt
 
@@ -173,6 +173,11 @@ class LabAgent(DQNAgent):
         is_pong = "Pong" in args.env
         if not is_pong:
             self.preprocessor = PassThroughPreprocessor()
+        # evaluate() has its own frame stack, so it can also run in the middle of a training game (dense evaluation)
+        self.eval_preprocessor = AtariPreprocessor() if is_pong else PassThroughPreprocessor()
+        self.dense_eval_from = args.dense_eval_from  # 0 = off. Extra evaluations from this env step (report W)
+        self.dense_eval_to = args.dense_eval_to  # ... up to and including this env step
+        self.dense_eval_every = args.dense_eval_every  # ... every this many env steps, a multiple of 1000
         self.best_reward = -21 if is_pong else 0  # the TA's comment in __init__: 0 for CartPole, -21 for Pong
         self.memory = ReplayMemory(
             args.memory_size,
@@ -263,12 +268,12 @@ class LabAgent(DQNAgent):
         """Average score over 20 games, seeds 0 to 19, with no random actions (spec 4.2.2).
 
         Replaces the TA's one-game evaluate(), so that best_model.pt and the logged Eval Reward are not luck.
-        It only runs between games, because it reuses self.preprocessor.
+        It has its own frame stack (eval_preprocessor), so it can also run in the middle of a training game.
         """
         scores = []
         for seed in range(20):
             obs, _ = self.test_env.reset(seed=seed)
-            state = self.preprocessor.reset(obs)
+            state = self.eval_preprocessor.reset(obs)
             done = False
             total_reward = 0
             while not done:
@@ -278,7 +283,7 @@ class LabAgent(DQNAgent):
                 next_obs, reward, terminated, truncated, _ = self.test_env.step(action)
                 done = terminated or truncated
                 total_reward += reward
-                state = self.preprocessor.step(next_obs)
+                state = self.eval_preprocessor.step(next_obs)
             scores.append(total_reward)
         mean = float(np.mean(scores))
         seconds = round(time.time() - self.start_time)
@@ -297,6 +302,11 @@ class LabAgent(DQNAgent):
         if self.env_count in self.snapshot_steps:  # spec 4.2.2, Task 3
             torch.save(self.q_net.state_dict(), os.path.join(self.save_dir, f"snapshot_{self.env_count}.pt"))
             self.record_new_checkpoints()
+        if self.dense_eval_from and self.dense_eval_from <= self.env_count <= self.dense_eval_to:
+            if self.env_count % self.dense_eval_every == 0:
+                # TA announcement of 11/10: any model at 19 within a step threshold counts, so more evaluations
+                # before 600k give more chances to catch one. evaluate() saves first19_<n>.pt (report W).
+                self.evaluate()
         if self.env_count % RESUME_EVERY == 0:
             self.save_resume()
         if self.env_count % 10000 == 0:
@@ -432,6 +442,12 @@ def parse_args():
     parser.add_argument("--reset-every", type=int, default=0)  # default 0, never; updates between resets (H)
     parser.add_argument("--reset-keep", type=float, default=0.8)  # default 0.8, share of conv weights kept (H)
     parser.add_argument("--reset-stop", type=int, default=0)  # default 0, no limit; no reset from this env step (H)
+    parser.add_argument(
+        "--width", type=int, default=1
+    )  # default 1, test_model.py's network; multiplies layer sizes (W)
+    parser.add_argument("--dense-eval-from", type=int, default=0)  # default 0, off; first extra evaluation step (W)
+    parser.add_argument("--dense-eval-to", type=int, default=0)  # default 0; last extra evaluation step (W)
+    parser.add_argument("--dense-eval-every", type=int, default=10000)  # default 10000; a multiple of 1000 (W)
     args = parser.parse_args()
     if args.max_env_steps % 1000 != 0:
         parser.error("--max-env-steps must be a multiple of 1000: run() only checks it every 1000 steps")
@@ -459,6 +475,7 @@ def main():
     wandb.define_metric("Env Step Count")
     wandb.define_metric("*", step_metric="Env Step Count")
 
+    DQN.width = args.width  # read by DQN.__init__ (in dqn.py's TODO) for the main, target and reset networks
     agent = LabAgent(args)
     agent.run(episodes=10**9)  # the TODO in run() stops it at --max-env-steps
     agent.record_new_checkpoints()

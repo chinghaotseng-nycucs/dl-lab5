@@ -154,6 +154,15 @@ case "$1" in
     python run_experiment.py --name task3_g4_s14 $G --replay-start-size 5000 --epsilon-decay 0.99992 --seed 14 ;;
   task3_g4_s15)   # G4, seed 15
     python run_experiment.py --name task3_g4_s15 $G --replay-start-size 5000 --epsilon-decay 0.99992 --seed 15 ;;
+  task3_w2)      # W2: network twice as wide (BBF's biggest gain), early start, 600k only, evaluation every 10k from 100k
+    python run_experiment.py --name task3_w2 $G --replay-start-size 5000 --epsilon-decay 0.99992 --width 2 \
+      --max-env-steps 600000 --snapshot-steps 600000 --dense-eval-from 100000 --dense-eval-to 600000 ;;
+  task3_w1d)     # W1D: the early start alone with the dense evaluation (control for W2), 600k only
+    python run_experiment.py --name task3_w1d $G --replay-start-size 5000 --epsilon-decay 0.99992 \
+      --max-env-steps 600000 --snapshot-steps 600000 --dense-eval-from 100000 --dense-eval-to 600000 ;;
+  task3_w4)      # W4: network four times as wide, early start, 600k only
+    python run_experiment.py --name task3_w4 $G --replay-start-size 5000 --epsilon-decay 0.99992 --width 4 \
+      --max-env-steps 600000 --snapshot-steps 600000 --dense-eval-from 100000 --dense-eval-to 600000 ;;
   task3_h1)      # H1: 4 updates per step with random shifts and resets every 40k updates (SR-SPR, BBF), none after 500k
     python run_experiment.py --name task3_h1 $G --train-per-step 4 --epsilon-decay 0.999995 --per-beta-steps 4000000 \
       --augment-pad 4 --reset-every 40000 --reset-keep 0.8 --reset-stop 500000 ;;

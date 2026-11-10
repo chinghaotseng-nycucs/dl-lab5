@@ -32,18 +32,23 @@ def evaluate_snapshot(env_name):
     parser.add_argument("--episodes", type=int, default=20)  # default 20 (spec 4.2.2)
     parser.add_argument("--first-seed", type=int, default=0)  # default 0: seeds 0 to 19 (spec 4.2.2)
     parser.add_argument("--video-dir", type=str, default="")  # default none: no videos
+    parser.add_argument("--env-steps", type=str, default="")  # default: read from the file name, else "best"
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     env = gym.make(env_name, render_mode="rgb_array")
     preprocessor = AtariPreprocessor() if "Pong" in env_name else PassThroughPreprocessor()
+    state_dict = torch.load(args.model_path, map_location=device, weights_only=True)
+    if "Pong" in env_name:
+        # TA announcement 11/10: the network may differ from test_model.py. The width is read from the weights.
+        DQN.width = state_dict["network.0.weight"].shape[0] // 32
     model = DQN(env.action_space.n).to(device)
-    model.load_state_dict(torch.load(args.model_path, map_location=device, weights_only=True))
+    model.load_state_dict(state_dict)
     model.eval()
     if args.video_dir:
         os.makedirs(args.video_dir, exist_ok=True)
 
-    steps = steps_from_name(args.model_path)
+    steps = args.env_steps or steps_from_name(args.model_path)  # TA announcement 11/10: print the training steps
     scores = []
     for seed in range(args.first_seed, args.first_seed + args.episodes):
         obs, _ = env.reset(seed=seed)  # the same seed repeats the same game, so the TAs can reproduce it
